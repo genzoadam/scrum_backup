@@ -2,23 +2,22 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Validator;
-// menampilkan user
 use App\Role;
 use App\RoleUser;
-use App\User;
+// menampilkan user
+use App\Sprintbacklog;
 use App\Team;
 use App\TeamUser;
-use Illuminate\Support\Facades\Auth;
-// use Yajra\Datatables\Facades\Datatables;
-use Yajra\DataTables\Html\Builder;
-use Yajra\DataTables\Datatables;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Session;
-// mengunakan Exel
+use App\User;
 use Excel;
-use App\Sprintbacklog;
+use Illuminate\Http\Request;
+// use Yajra\Datatables\Facades\Datatables;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Session;
+use Validator;
+// mengunakan Exel
+use Yajra\DataTables\Datatables;
+use Yajra\DataTables\Html\Builder;
 
 class UsersController extends Controller
 {
@@ -30,99 +29,97 @@ class UsersController extends Controller
     public function index(Request $request, Builder $htmlBuilder)
     {
         if ($request->ajax()) {
-            $members = User::with('team')->orderBy('id','desc');
+            $members = User::with('team')->orderBy('id', 'desc');
             return Datatables::of($members)
-            ->escapeColumns([])
-        // ->addColumn($member->role_user->role)
-            ->addColumn('action', function($member){
-                return view('datatable._action_user', [
-                    'model' => $member,
-                    'id_member' => $member->id,
-                    'form_url' => route('users.destroy', $member->id),
-                    'edit_url' => route('users.edit', $member->id),
-                    'confirm_message' => 'Yakin akan menghapus ' . $member->name . ' ?'
-                ]);
-            })
-            ->addColumn('konfirmasi', function($member){
-                return view('datatable._konfirmasi', [
-                    'model' => $member, 
-                    'konfirmasi_url' => route('users.konfirmasi', $member->id),
-                    'confirm_message' => 'Apakah Anda Yakin akan mengkonfimasi ' . $member->name . ' ?',
-                    'confirm_messages' => 'Apakah Anda Yakin akan membatalkan konfirmasi ' . $member->name . ' ?'
-                ]);
-            })  
+                ->escapeColumns([])
+            // ->addColumn($member->role_user->role)
+                ->addColumn('action', function ($member) {
+                    return view('datatable._action_user', [
+                        'model'           => $member,
+                        'id_member'       => $member->id,
+                        'form_url'        => route('users.destroy', $member->id),
+                        'edit_url'        => route('users.edit', $member->id),
+                        'confirm_message' => 'Yakin akan menghapus ' . $member->name . ' ?',
+                    ]);
+                })
+                ->addColumn('konfirmasi', function ($member) {
+                    return view('datatable._konfirmasi', [
+                        'model'            => $member,
+                        'konfirmasi_url'   => route('users.konfirmasi', $member->id),
+                        'confirm_message'  => 'Apakah Anda Yakin akan mengkonfimasi ' . $member->name . ' ?',
+                        'confirm_messages' => 'Apakah Anda Yakin akan membatalkan konfirmasi ' . $member->name . ' ?',
+                    ]);
+                })
 
-            ->addColumn('re_pass', function($member){
-                return view('datatable.re_pass', [
-                    'model' => $member, 
-                    're_pass_url' => route('users.repass', $member->id),
-                    'confirm_message' => 'Apakah Anda Yakin akan me-reset password ' . $member->name . ' ?',
-                ]);
-            })
+                ->addColumn('re_pass', function ($member) {
+                    return view('datatable.re_pass', [
+                        'model'           => $member,
+                        're_pass_url'     => route('users.repass', $member->id),
+                        'confirm_message' => 'Apakah Anda Yakin akan me-reset password ' . $member->name . ' ?',
+                    ]);
+                })
 
-            ->addColumn('otoritas', function($member){
-                return $member->roleUser->role->name;
-            })
+                ->addColumn('otoritas', function ($member) {
+                    return $member->roleUser->role->name;
+                })
 
-            ->addColumn('detail', function($member){
-                return view('datatable.detail_user', [
-                    // 'model' => $member, 
-                    'detail_user' => route('users.detailUser', $member->id),
-                ]);
-            })
+                ->addColumn('detail', function ($member) {
+                    return view('datatable.detail_user', [
+                        // 'model' => $member,
+                        'detail_user' => route('users.detailUser', $member->id),
+                    ]);
+                })
 
+                ->addColumn('team', function ($member) {
 
-            ->addColumn('team', function($member){
+                    $teams     = TeamUser::where('user_id', $member->id)->get();
+                    $data_team = '';
+                    foreach ($teams as $team) {
+                        if ($data_team == '') {
+                            $data_team .= $team->team->nama_team;
+                        } else {
+                            $data_team .= ', ' . $team->team->nama_team;
 
-                $teams = TeamUser::where('user_id', $member->id)->get();
-                $data_team = '';
-                foreach($teams as $team) {
-                    if ($data_team == '') {
-                        $data_team .= $team->team->nama_team;
+                        }
+
                     }
-                    else {
-                        $data_team .= ', ' . $team->team->nama_team;
+                    return $data_team;
 
-                    }
+                })
 
-                }
-                return $data_team;
-                
-            })
+                ->addColumn('total_assign', function ($member) {
+                    $jumlahAssign = Sprintbacklog::where([
+                        ['assign_user_id', '=', $member->id],
+                        ['assign', '=', 1],
+                    ])->count();
+                    // if ($jumlahAssign == 0) {
+                    //     $jumlahAssign = "BELUM ADA";
+                    // }
+                    return $jumlahAssign;
+                })
 
-            ->addColumn('total_assign', function($member) {
-                $jumlahAssign = Sprintbacklog::where([
-                    ['assign_user_id', '=', $member->id],
-                    ['assign', '=', 1]
-                ])->count();
-                // if ($jumlahAssign == 0) {
-                //     $jumlahAssign = "BELUM ADA";
-                // }
-                return $jumlahAssign;
-            })
-
-            ->addColumn('total_finish', function($member) {
-                $jumlahFinish = Sprintbacklog::where([
-                    ['assign_user_id', '=', $member->id],
-                    ['finish', '=', 1]
-                ])->count();
-                // if ($jumlahAssign == 0) {
-                //     $jumlahAssign = "BELUM ADA";
-                // }
-                return $jumlahFinish;
-            })->make(true);
+                ->addColumn('total_finish', function ($member) {
+                    $jumlahFinish = Sprintbacklog::where([
+                        ['assign_user_id', '=', $member->id],
+                        ['finish', '=', 1],
+                    ])->count();
+                    // if ($jumlahAssign == 0) {
+                    //     $jumlahAssign = "BELUM ADA";
+                    // }
+                    return $jumlahFinish;
+                })->make(true);
         }
-        
+
         $html = $htmlBuilder
-        ->addColumn(['data' => 'name', 'name'=>'name', 'title'=>'Nama'])
-        ->addColumn(['data' => 'email', 'name'=>'email', 'title'=>'Email'])
-        ->addColumn(['data' => 'team', 'name'=>'team', 'title'=>'Team', 'orderable'=>false, 'searchable'=>false])
-        ->addColumn(['data' => 'otoritas', 'name'=>'otoritas', 'title'=>'Otoritas', 'orderable'=>false, 'searchable'=>false])
-        ->addColumn(['data' => 'total_assign', 'name' => 'total_assign', 'title' => 'Total Assign'])
-        ->addColumn(['data' => 'total_finish', 'name' => 'total_finish', 'title' => 'Total Finish'])
-        ->addColumn(['data' => 'konfirmasi', 'name'=>'konfirmasi', 'title'=>'Konfirmasi', 'orderable'=>false, 'searchable'=>false])
-        ->addColumn(['data' => 're_pass', 'name'=>'re_pass', 'title'=>'Reset password', 'orderable'=>false, 'searchable'=>false])
-        ->addColumn(['data' => 'action', 'name'=>'action', 'title'=>'Aksi', 'orderable'=>false, 'searchable'=>false]);
+            ->addColumn(['data' => 'name', 'name' => 'name', 'title' => 'Nama'])
+            ->addColumn(['data' => 'email', 'name' => 'email', 'title' => 'Email'])
+            ->addColumn(['data' => 'team', 'name' => 'team', 'title' => 'Team', 'orderable' => false, 'searchable' => false])
+            ->addColumn(['data' => 'otoritas', 'name' => 'otoritas', 'title' => 'Otoritas', 'orderable' => false, 'searchable' => false])
+            ->addColumn(['data' => 'total_assign', 'name' => 'total_assign', 'title' => 'Total Assign'])
+            ->addColumn(['data' => 'total_finish', 'name' => 'total_finish', 'title' => 'Total Finish'])
+            ->addColumn(['data' => 'konfirmasi', 'name' => 'konfirmasi', 'title' => 'Konfirmasi', 'orderable' => false, 'searchable' => false])
+            ->addColumn(['data' => 're_pass', 'name' => 're_pass', 'title' => 'Reset password', 'orderable' => false, 'searchable' => false])
+            ->addColumn(['data' => 'action', 'name' => 'action', 'title' => 'Aksi', 'orderable' => false, 'searchable' => false]);
         // ->addColumn(['data' => 'detail', 'name'=>'detail', 'title'=>'Detail', 'orderable'=>false, 'searchable'=>false]);
         return view('users.index', compact('html'));
     }
@@ -134,8 +131,8 @@ class UsersController extends Controller
      */
     public function create()
     {
-       return view('users.create');
-   }
+        return view('users.create');
+    }
 
     /**
      * Store a newly created resource in storage.
@@ -146,27 +143,25 @@ class UsersController extends Controller
     public function store(Request $request)
     {
 
-
         $this->validate($request, [
-            'name' => 'required:users',
-            'email' => 'required|unique:users',
+            'name'     => 'required:users',
+            'email'    => 'required|unique:users',
             'otoritas' => 'required|exists:roles,id',
-            'team_id' => 'required'
+            'team_id'  => 'required',
         ]);
         // $team_id = Team::where('id', $request->team_id)->first();
-        $Role = Role::where('id', $request->otoritas)->first();
-        $password = 'rahasiaku';
-        $is_verified = 1;      
-        $user = User::create(['name' => $request->name, 'email' => $request->email, 'password' => $password, 'is_verified' => $is_verified]);
+        $Role        = Role::where('id', $request->otoritas)->first();
+        $password    = 'rahasiaku';
+        $is_verified = 1;
+        $user        = User::create(['name' => $request->name, 'email' => $request->email, 'password' => $password, 'is_verified' => $is_verified]);
         $user->attachRole($Role);
-        foreach($request->team_id as $team_id){
+        foreach ($request->team_id as $team_id) {
             TeamUser::create(['user_id' => $user->id, 'team_id' => $team_id]);
         }
 
-
         Session::flash("flash_notification", [
-            "level"=>"success",
-            "message"=>"Berhasil menyimpan user $user->name"
+            "level"   => "success",
+            "message" => "Berhasil menyimpan user $user->name",
         ]);
         return redirect()->route('users.index');
 
@@ -191,11 +186,11 @@ class UsersController extends Controller
      */
     public function edit($id)
     {
-        $user = User::with('roleUser')->find($id);
-        $team = TeamUser::where('user_id', $id)->get();
+        $user      = User::with('roleUser')->find($id);
+        $team      = TeamUser::where('user_id', $id)->get();
         $data_team = '';
         foreach ($team as $teams) {
-            $data_team .= "'" . $teams->team_id . "', "; 
+            $data_team .= "'" . $teams->team_id . "', ";
         }
         return view('users.edit')->with(compact('user', 'data_team'));
 
@@ -212,13 +207,13 @@ class UsersController extends Controller
     public function update(Request $request, $id)
     {
         $this->validate($request, [
-            'name' => 'required:users,name',
-            'email' => 'required|unique:users,email,'. $id,
+            'name'     => 'required:users,name',
+            'email'    => 'required|unique:users,email,' . $id,
             'otoritas' => 'required|exists:roles,id',
-            'team_id' => 'required|exists:teams,id'
+            'team_id'  => 'required|exists:teams,id',
         ]);
 
-        //update untuk di data user 
+        //update untuk di data user
         $roleLama = RoleUser::where('user_id', $id)->delete();
         $teamLama = TeamUser::where('user_id', $id)->delete();
         // $team_id = Team::where('id', $request->team_id, $id)->first();
@@ -228,13 +223,13 @@ class UsersController extends Controller
         $user->attachRole($role);
         // $team = TeamUser::where('user_id', $id)->where('team_id', $id);
 
-        foreach($request->team_id as $team_id){
+        foreach ($request->team_id as $team_id) {
             TeamUser::create(['user_id' => $user->id, 'team_id' => $team_id]);
         }
 
         session::flash('flash_notification', [
-            "level" => "success",
-            "message" => "Anda Berhasil mengedit " . $user->name . " !"
+            "level"   => "success",
+            "message" => "Anda Berhasil mengedit " . $user->name . " !",
         ]);
         return redirect()->route('users.index');
     }
@@ -250,28 +245,28 @@ class UsersController extends Controller
         $teamLama = TeamUser::where('user_id', $id)->delete();
         User::destroy($id);
         Session::flash('flash_notification', [
-            "level" => "danger", 
-            "message" => "Proses menghapus berhasil !"
+            "level"   => "danger",
+            "message" => "Proses menghapus berhasil !",
         ]);
         return redirect()->route('users.index');
     }
 
     // untuk proses verivikasi user
-    public function konfirmasi($id){                                                      
+    public function konfirmasi($id)
+    {
         $user = User::find($id);
 
         if ($user->is_verified == 0) {
             $user->update(['is_verified' => 1]);
-            Session::flash('flash_notification',  [
-                'level' => 'success',
-                'message' => 'User ' .$user->name . ' berhasil di Konfirmasi ! '
+            Session::flash('flash_notification', [
+                'level'   => 'success',
+                'message' => 'User ' . $user->name . ' berhasil di Konfirmasi ! ',
             ]);
-        }
-        else {
+        } else {
             $user->update(['is_verified' => 0]);
-            Session::flash('flash_notification',  [
-                'level' => 'danger',
-                'message' => 'User ' .$user->name . ' berhasil di batalkan ! '
+            Session::flash('flash_notification', [
+                'level'   => 'danger',
+                'message' => 'User ' . $user->name . ' berhasil di batalkan ! ',
             ]);
         }
 
@@ -279,49 +274,52 @@ class UsersController extends Controller
     }
 
     // untuk proses reset password
-    public function repass($id) {
-        $user = User::find($id);
+    public function repass($id)
+    {
+        $user     = User::find($id);
         $password = 'rahasiaku';
         if ($user->password == true) {
             $user->update([
-                'password' => $password
+                'password' => $password,
             ]);
         }
         return redirect()->route('users.index');
     }
 
     // proses export berdasarkan id
-    public function export() {
+    public function export()
+    {
         return view('users.export');
     }
 
-    // proses export 
-    public function exportPost(Request $request) {
+    // proses export
+    public function exportPost(Request $request)
+    {
         // validasi
         $this->validate($request, [
-            'name'=>'required',
+            'name' => 'required',
         ], [
-            'name.required'=>'Anda belum memilih penulis. Pilih minimal 1 penulis.'
+            'name.required' => 'Anda belum memilih penulis. Pilih minimal 1 penulis.',
         ]);
 
         $users = User::whereIn('id', $request->get('name'))->get();
-        Excel::create('Data User Scrum-App', function($excel) use ($users) {
+        Excel::create('Data User Scrum-App', function ($excel) use ($users) {
             // Set property
             $excel->setTitle('Data User Scrum-App')
-            ->setCreator(Auth::user()->name);
-                // ->setCreator(Auth::user()->name);
-            $excel->sheet('Data User', function($sheet) use ($users) {
+                ->setCreator(Auth::user()->name);
+            // ->setCreator(Auth::user()->name);
+            $excel->sheet('Data User', function ($sheet) use ($users) {
                 $row = 1;
                 $sheet->row($row, [
                     'Nama',
                     'Email',
-                    'Konfirmasi'
+                    'Konfirmasi',
                 ]);
                 foreach ($users as $user) {
                     $sheet->row(++$row, [
                         $user->name,
                         $user->email,
-                        $user->is_verified
+                        $user->is_verified,
                     ]);
                 }
             });
@@ -329,10 +327,11 @@ class UsersController extends Controller
     }
 
     // untuk proses export all
-    public function exportAllPost() {
+    public function exportAllPost()
+    {
         $data = User::select('name', 'email', 'password', 'is_verified')->get();
-        Excel::create('Semua Data User', function($excel) use ($data) {
-            $excel->sheet('Data User', function($sheet) use ($data) {
+        Excel::create('Semua Data User', function ($excel) use ($data) {
+            $excel->sheet('Data User', function ($sheet) use ($data) {
                 $sheet->fromArray($data);
 
             });
@@ -340,58 +339,60 @@ class UsersController extends Controller
         })->download('xls');
     }
 
-    public function generateExcelTemplate() { 
-        Excel::create('Template Import User', function($excel) {
+    public function generateExcelTemplate()
+    {
+        Excel::create('Template Import User', function ($excel) {
             // Set the properties
             $excel->setTitle('Template Import User')
-            ->setCreator('Scrum-App')
-            ->setCompany('Scrum-App')
-            ->setDescription('Template import data user untuk Scrum-App');
-            $excel->sheet('Data User', function($sheet) {
+                ->setCreator('Scrum-App')
+                ->setCompany('Scrum-App')
+                ->setDescription('Template import data user untuk Scrum-App');
+            $excel->sheet('Data User', function ($sheet) {
                 $row = 1;
                 $sheet->row($row, [
                     'name',
                     'email',
                     'password',
                     'otoritas',
-                    'team_id'
+                    'team_id',
                 ]);
             });
         })->export('xlsx');
     }
-    public function importExcel(Request $request) {
+    public function importExcel(Request $request)
+    {
         // validasi untuk memastikan file yang diupload adalah excel
-        $this->validate($request, [ 'excel' => 'required|mimes:xls,xlsx' ]);
+        $this->validate($request, ['excel' => 'required|mimes:xls,xlsx']);
         // ambil file yang baru diupload
         $excel = $request->file('excel');
         // baca sheet pertama
-        $excels = Excel::selectSheetsByIndex(0)->load($excel, function($reader) {
-        // options, jika ada
+        $excels = Excel::selectSheetsByIndex(0)->load($excel, function ($reader) {
+            // options, jika ada
         })->get();
         // rule untuk validasi setiap row pada file excel
         $rowRules = [
-            'name' => 'required',
-            'email' => 'required|unique:users',
+            'name'     => 'required',
+            'email'    => 'required|unique:users',
             'password' => 'required',
             'otoritas' => 'required|exists:roles,id',
-            'team_id' => 'required'
+            'team_id'  => 'required',
         ];
         // Catat semua id buku baru
         // ID ini kita butuhkan untuk menghitung total buku yang berhasil diimport
         $users_id = [];
-            // looping setiap baris, mulai dari baris ke 2 (karena baris ke 1 adalah nama kolom)
+        // looping setiap baris, mulai dari baris ke 2 (karena baris ke 1 adalah nama kolom)
         foreach ($excels as $row) {
             // Membuat validasi untuk row di excel
             // Disini kita ubah baris yang sedang di proses menjadi array
             $validator = Validator::make($row->toArray(), $rowRules);
             // buat buku baru
             $user = User::create([
-                'name' => $row['name'],
-                'email' => $row['email'],
-                'password' => $row['password']
+                'name'     => $row['name'],
+                'email'    => $row['email'],
+                'password' => $row['password'],
             ]);
             $role = RoleUser::create([
-                'user_id' => $user->id, 'role_id' => $row['otoritas']
+                'user_id' => $user->id, 'role_id' => $row['otoritas'],
             ]);
             $team = Teamuser::create([
                 'user_id' => $user->id,
@@ -404,26 +405,27 @@ class UsersController extends Controller
         // redirect ke form jika tidak ada buku yang berhasil diimport
         if ($users->count() == 0) {
             Session::flash("flash_notification", [
-                "level" => "danger",
-                "message" => "Tidak ada buku yang berhasil diimport."
+                "level"   => "danger",
+                "message" => "Tidak ada buku yang berhasil diimport.",
             ]);
             return redirect()->back();
         }
         // set feedback
         Session::flash("flash_notification", [
-            "level" => "success",
-            "message" => "Berhasil mengimport " . $users->count() . " user."
+            "level"   => "success",
+            "message" => "Berhasil mengimport " . $users->count() . " user.",
         ]);
         // Tampilkan index buku
         return redirect()->route('users.index');
 
     }
 
-    public function jmlAssign() {
+    public function jmlAssign()
+    {
 
     }
-    public function jmlFinish() {
+    public function jmlFinish()
+    {
 
     }
 }
-
